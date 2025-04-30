@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { log } from 'console';
 import { PaginationDto } from '../common/dtos/pagination.dto';
+import { ProductImage } from './entities';
 
 @Injectable()
 export class ProductsService {
@@ -16,15 +17,23 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product) // Inject the Product repository
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(ProductImage) // Inject the Product repository
+    private readonly productImageRepository: Repository<ProductImage>,
+    private readonly dataSource: DataSource, // Inject the DataSource for database operations
   ) { }
 
   async create(createProductDto: CreateProductDto) {
     try {
+      const {images = [], ...productDetails} = createProductDto; // Destructure the DTO to get images and product details}
 
-      const product = this.productRepository.create(createProductDto); // Create a new product instance into the database
+      const product = this.productRepository.create({
+        ...productDetails, 
+        images: images.map( img => this.productImageRepository.create({ url: img })) // Create a new product instance with images
+
+      }); // Create a new product instance into the database
       await this.productRepository.save(product); // Save the product instance to the database
 
-      return product; // Return the created product instance
+      return {...product, images}; // Return the created product instance
     } catch (error) {
       this.handleDBErrors(error); // Handle any database errors that occur during the creation process
     }
@@ -33,10 +42,18 @@ export class ProductsService {
   async findAll(paginationDto: PaginationDto) {
     const { limit = 10, offset = 0 } = paginationDto; // Destructure the pagination DTO to get limit and offset values
 
-    return await this.productRepository.find({
+    const products = await this.productRepository.find({
       take: limit, // Limit the number of results returned
       skip: offset, // Skip the specified number of results
+      relations: {
+        images: true, // Include related images in the results
+      }
     }); // Find all products in the database with pagination
+
+    return products.map(({images, ...productDetails}) => ({
+      ...productDetails,
+      images: images!.map(image => image.url) // Map the images to their URLs
+    })); // Return the products with their images
   }
 
   async findOne(searchTerm: string) {
@@ -50,16 +67,45 @@ export class ProductsService {
     return product; // Return the found product
   }
 
+  async findOnePlain(searchTerm: string) {
+    let {images = [], ...product} = await this.findOne(searchTerm); // Find a product by its UUID or slug
+    return {
+      ...product,
+      images: images.map(image => image.url) // Map the images to their URLsq
+    }
+  }
+
   async update(id: string, updateProductDto: UpdateProductDto) {
+    const { images, ...toUpdate } = updateProductDto; // Destructure the DTO to get images and product details
+    
+    const product = await this.productRepository.preload({ id, ...toUpdate}); // Preload the product with the updated data
+    
+    if (!product) // If no product is found, throw an error
+    throw new NotFoundException(`Product with id "${id}" not found`);
+    
+    // Create query runner
+    const queryRunner = this.dataSource.createQueryRunner(); // Create a new query runner
     try {
-      const product = await this.productRepository.preload({ id, ...updateProductDto }); // Preload the product with the updated data
+      await queryRunner.connect(); // Connect the query runner to the database
+      await queryRunner.startTransaction(); // Start a new transaction
 
-      if (!product) // If no product is found, throw an error
-        throw new NotFoundException(`Product with id "${id}" not found`);
 
-      await this.productRepository.save(product); // Save the updated product to the database
-      return product; // Return the updated product
+      if (images) { // If images are provided, handle them
+        await queryRunner.manager.delete(ProductImage, { product: { id } }); // Delete existing images for the product
+
+        product.images = images.map(image => this.productImageRepository.create({ url: image })); // Create new images for the product
+      }
+
+      await queryRunner.manager.save(product); // Save the new images to the database
+      
+      await queryRunner.commitTransaction(); // Commit the transaction
+      await queryRunner.release(); // Release the query runner
+      // await this.productRepository.save(product); // Save the updated product to the database
+      return this.findOnePlain(id); // Return the updated product
+
     } catch (error) {
+      await queryRunner.rollbackTransaction(); // Rollback the transaction in case of an error
+      await queryRunner.release(); // Release the query runner
       this.handleDBErrors(error); // Handle any database errors that occur during the update process
     }
   }
@@ -95,6 +141,18 @@ export class ProductsService {
 
       default:
         throw new InternalServerErrorException('Please check server logs');
+    }
+  }
+
+  async deleteAllProducts() {
+    const query = this.productRepository.createQueryBuilder('product'); // Create a query builder for the product repository
+    try {
+      return await query
+        .delete() // Delete all products from the database
+        .where({}) // No conditions, delete all products
+        .execute(); // Execute the delete operation
+    } catch (error) {
+      this.handleDBErrors(error); // Handle any database errors that occur during the deletion process
     }
   }
 }
