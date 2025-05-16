@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ProductsService } from '../products/products.service';
+import { initialData } from './data/seed-data';
 
 @Injectable()
 export class SeedService {
@@ -15,6 +16,11 @@ export class SeedService {
   }
 
   private async insertNewProducts() {
+    const products = initialData.products; // Get the initial data for products
+    const insertPromises = products.map(product => this.productsService.create(product)); // Map each product to a create promise
+    await Promise.all(insertPromises); // Wait for all promises to resolve
+
+
     return true;
   }
 }
