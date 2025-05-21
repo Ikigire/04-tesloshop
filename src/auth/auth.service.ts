@@ -5,55 +5,65 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 
 import * as bcrypt from 'bcrypt'; // Import bcrypt for password hashing
+import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
 
-    private readonly logger = new Logger(AuthService.name); // Initialize a logger for the service
+  private readonly logger = new Logger(AuthService.name); // Initialize a logger for the service
 
 
   constructor(
     @InjectRepository(User)
-    private readonly userRepository: Repository<User>
-  ) {}
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService, // Inject the JWT service for token generation
+  ) { }
 
   async create(createAuthDto: CreateUserDto) {
     try {
       const { password, ...userData } = createAuthDto; // Destructure the DTO to get password and user details
 
-      const user = await this.userRepository.create({
+      const user = this.userRepository.create({
         ...userData,
         password: bcrypt.hashSync(password, 10), // Hash the password before saving
       });
 
-       const { password:_ , ...UserToReturn } = user;
-      
-      return UserToReturn // Return the user without the password
+      await this.userRepository.save(user); // Save the user instance to the database
+
+      const { password: _, ...userToReturn } = user;
+
+      return { ...userToReturn, token: this.getJwtToken({ id: userToReturn.id }) } // Return the user without the password
     } catch (error) {
-      console.log(error);
+      this.handleError(error);
     }
   }
 
   async login(loginUserDto: LoginUserDto) {
-    try {
-      const { password, email } = loginUserDto; // Destructure the DTO to get password and email
 
-      const user = await this.userRepository.findOne({
-        where: { email }, // Find the user by email
-        select: { password: true, id: true, fullname: true, email: true } // Select only the necessary fields
-      }); // Find the user by email
+    const { password, email } = loginUserDto; // Destructure the DTO to get password and email
 
-      if (!user) throw new UnauthorizedException('Credentials are not valid'); // If user not found, throw an error
+    const user = await this.userRepository.findOne({
+      where: { email }, // Find the user by email
+      select: { password: true, id: true, fullname: true, email: true } // Select only the necessary fields
+    }); // Find the user by email
 
-      if (!bcrypt.compareSync(password, user.password)) { // Compare the hashed password with the provided password
-        throw new UnauthorizedException('Credentials are not valid');
-      }
+    if (!user) throw new UnauthorizedException('Credentials are not valid'); // If user not found, throw an error
 
-      return user; // Return the user if credentials are valid
-    } catch (error) {
-      this.handleError(error); // Handle any errors that occur
+    if (!bcrypt.compareSync(password, user.password)) { // Compare the hashed password with the provided password
+      throw new UnauthorizedException('Credentials are not valid');
     }
 
+    const { password: _, ...userData } = user; // Destructure the user to remove the password
+
+    return { ...userData, token: this.getJwtToken({ id: user.id }) }; // Return the user if credentials are valid
+
+
+  }
+
+  private getJwtToken(payload: JwtPayload) {
+    const token = this.jwtService.sign(payload); // Sign the payload to create a JWT token
+    return token; // Return the token
   }
 
   private handleError(error: any) {
