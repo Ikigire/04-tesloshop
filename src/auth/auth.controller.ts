@@ -2,6 +2,9 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@n
 import { AuthService } from './auth.service';
 import { LoginUserDto, CreateUserDto } from './dto';
 import { AuthGuard } from '@nestjs/passport';
+import { GetUser } from './decorators/get-user.decorator';
+import { User } from './entities/user.entity';
+import { RawHeaders } from './decorators/raw-headers.decorator';
 ;
 
 @Controller('auth')
@@ -20,7 +23,10 @@ export class AuthController {
 
   @Get('private')
   @UseGuards( AuthGuard() )
-  testParivate() {
+  testParivate(
+    @GetUser() user: User,
+    @RawHeaders() rawHeaders: string[],
+  ) {
     return {
       ok: true,
       message: "Hello Madafaka"
