@@ -8,7 +8,7 @@ export class SeedController {
   constructor(private readonly seedService: SeedService) {}
 
   @Get()
-  @Auth(ValidRoles.admin) // Only allow access to admin users
+  // @Auth(ValidRoles.admin) // Only allow access to admin users
   executeSeed() {
     return this.seedService.runSeed();
   }

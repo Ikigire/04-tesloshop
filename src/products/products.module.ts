@@ -13,11 +13,11 @@ import { AuthModule } from 'src/auth/auth.module';
       Product,
       ProductImage
      ]),
+     AuthModule,
   ],
   exports: [
     ProductsService,
     TypeOrmModule,
-    AuthModule
   ]
 })
 export class ProductsModule {}

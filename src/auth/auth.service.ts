@@ -61,6 +61,11 @@ export class AuthService {
 
   }
 
+  async checkAuthStatus(user: User) {
+    const { password: _, ...userData } = user; // Destructure the user to remove the password
+    return { ...userData, token: this.getJwtToken({ id: user.id }) }; // Return the user data and a new token
+  }
+
   private getJwtToken(payload: JwtPayload) {
     const token = this.jwtService.sign(payload); // Sign the payload to create a JWT token
     return token; // Return the token

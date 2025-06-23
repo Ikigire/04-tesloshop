@@ -1,5 +1,6 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { BeforeInsert, BeforeUpdate, Column, Entity, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { ProductImage } from './product-image.entity';
+import { User } from "src/auth/entities/user.entity";
 
 
 @Entity({
@@ -37,10 +38,16 @@ export class Product {
     @OneToMany(
         () => ProductImage,
         (productImage) => productImage.product,
-        { cascade: true, eager: true } // Automatically load images with the product
+        { cascade: true, eager: true,  } // Automatically load images with the product
     )
     images?: ProductImage[]; // Array of image URLs
     
+    @ManyToOne(
+        () => User,
+        (user) => user.Products,
+        { eager: true, onDelete: 'NO ACTION' } // Automatically load user with the product, set to null if user is deleted
+    )
+    user?: User
 
     @BeforeInsert()
     @BeforeUpdate()

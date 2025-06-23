@@ -8,6 +8,7 @@ import { isUUID } from 'class-validator';
 import { log } from 'console';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { ProductImage } from './entities';
+import { User } from 'src/auth/entities/user.entity';
 
 @Injectable()
 export class ProductsService {
@@ -22,13 +23,14 @@ export class ProductsService {
     private readonly dataSource: DataSource, // Inject the DataSource for database operations
   ) { }
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, user: User) {
     try {
       const {images = [], ...productDetails} = createProductDto; // Destructure the DTO to get images and product details}
 
       const product = this.productRepository.create({
         ...productDetails, 
-        images: images.map( img => this.productImageRepository.create({ url: img })) // Create a new product instance with images
+        images: images.map( img => this.productImageRepository.create({ url: img })), // Create a new product instance with images
+        user // Associate the product with the user who created it
 
       }); // Create a new product instance into the database
       await this.productRepository.save(product); // Save the product instance to the database
@@ -75,7 +77,7 @@ export class ProductsService {
     }
   }
 
-  async update(id: string, updateProductDto: UpdateProductDto) {
+  async update(id: string, updateProductDto: UpdateProductDto, user: User) {
     const { images, ...toUpdate } = updateProductDto; // Destructure the DTO to get images and product details
     
     const product = await this.productRepository.preload({ id, ...toUpdate}); // Preload the product with the updated data
@@ -96,6 +98,7 @@ export class ProductsService {
         product.images = images.map(image => this.productImageRepository.create({ url: image })); // Create new images for the product
       }
 
+      product.user = user; // Associate the product with the user who updated it
       await queryRunner.manager.save(product); // Save the new images to the database
       
       await queryRunner.commitTransaction(); // Commit the transaction

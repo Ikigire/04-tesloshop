@@ -25,6 +25,12 @@ export class AuthController {
     return this.authService.login(loginUserDto);
   }
 
+  @Get('check-auth-status')
+  @Auth()
+  checkAuthStatus(@GetUser() user: User) {
+    return this.authService.checkAuthStatus(user);
+  }
+
   @Get('private')
   @UseGuards( AuthGuard() )
   testPrivate(
@@ -36,6 +42,7 @@ export class AuthController {
       message: "Hello Madafaka"
     };
   }
+
 
   @Get('private-roles')
   @SetMetadata('roles', ['admin', 'super-user'])
