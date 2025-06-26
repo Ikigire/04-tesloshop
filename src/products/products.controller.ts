@@ -7,17 +7,33 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles.enum';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
+import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Product } from './entities';
 
+@ApiTags('Products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly productsService: ProductsService) { }
 
   @Post()
   @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @ApiResponse({
+    status: 201,
+    description: 'Product created successfully',
+    type: Product
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. You do not have permission to perform this action.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request. The input data is invalid.',
+  })
   create(
     @Body() createProductDto: CreateProductDto,
     @GetUser() user: User
-) {
+  ) {
     return this.productsService.create(createProductDto, user);
   }
 
